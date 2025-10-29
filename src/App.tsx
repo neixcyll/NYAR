@@ -14,37 +14,42 @@ import Register from "./pages/Register";
 import AdminPage from "./pages/AdminPage";
 import { AdminRoute } from "./components/AdminRoute";
 
+import { CartProvider } from "./context/cart-context"; // ✅ ganti ini
+ // ✅ tambahkan ini
+
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <BrowserRouter>
-        {/* Semua route utama */}
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<Index />} />
-          <Route path="/product/:id" element={<ProductDetail />} />
-          <Route path="/cart" element={<Cart />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="*" element={<NotFound />} />
+        {/* ✅ Bungkus semua route dengan CartProvider */}
+        <CartProvider>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<Index />} />
+            <Route path="/product/:id" element={<ProductDetail />} />
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="*" element={<NotFound />} />
 
-          {/* Protected admin route */}
-          <Route
-            path="/admin"
-            element={
-              <AdminRoute>
-                <AdminPage />
-              </AdminRoute>
-            }
-          />
-        </Routes>
+            {/* Protected admin route */}
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute>
+                  <AdminPage />
+                </AdminRoute>
+              }
+            />
+          </Routes>
 
-        {/* ✅ Komponen global untuk notifikasi */}
-        <Toaster /> {/* ShadCN toast */}
-        <Sonner />  {/* Custom/Sonner toast */}
+          {/* ✅ Komponen global untuk notifikasi */}
+          <Toaster /> {/* ShadCN toast */}
+          <Sonner />  {/* Custom/Sonner toast */}
+        </CartProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

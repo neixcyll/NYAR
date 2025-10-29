@@ -1,14 +1,12 @@
-import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
+import ReactDOM from "react-dom/client";
+import App from "./App";
 import "./index.css";
-import { CartProvider } from "@/components/cart-context";
-import { Toaster } from "@/components/ui/toaster";
+import { CartProvider } from "@/context/cart-context"; // ✅ pastikan hurufnya sama persis
+import { Toaster } from "react-hot-toast"; // ✅ untuk notifikasi toast
 
-createRoot(document.getElementById("root")!).render(
-  <CartProvider>
-    <>
-      <App />
-      <Toaster /> {/* ✅ Sekarang semua halaman (/, /cart, /checkout, /admin) bisa pakai toast */}
-    </>
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <CartProvider>   {/* ✅ bungkus seluruh aplikasi */}
+    <App />
+    <Toaster position="bottom-right" />
   </CartProvider>
 );

@@ -1,34 +1,32 @@
 import { useEffect, useState } from "react";
-import { Search, Home, Bell, ShoppingCart } from "lucide-react";
+import { Search, Home, Bell, ShoppingCart, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "react-router-dom";
+import { useCart } from "../context/cart-context"; // ✅ ganti jadi relatif juga
+ // pastikan nama file-nya sama persis, besar kecil huruf penting
 import { supabase } from "@/lib/supabaseClient";
 
-interface HeaderProps {
-  cartItemCount?: number;
-  onSearchChange?: (query: string) => void;
-}
-
-export const Header = ({ cartItemCount = 0, onSearchChange }: HeaderProps) => {
+export const Header = () => {
   const location = useLocation();
   const [user, setUser] = useState<any>(null);
+  const { cartCount } = useCart(); // ambil jumlah keranjang dari context
+  console.log("cartCount di Header:", cartCount);
+
 
   useEffect(() => {
-    // cek user saat load pertama
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();X
       setUser(user);
     };
     getUser();
 
-    // listen perubahan login/logout
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null);
-      }
-    );
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
 
     return () => {
       listener.subscription.unsubscribe();
@@ -48,7 +46,7 @@ export const Header = ({ cartItemCount = 0, onSearchChange }: HeaderProps) => {
           <Link to="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
               <span className="text-primary-foreground text-sm font-bold">
-                <img src="bulat.png" alt="" />
+                <img src="bulat.png" alt="logo" />
               </span>
             </div>
             <span className="text-xl font-bold text-foreground">FixieStore</span>
@@ -61,7 +59,6 @@ export const Header = ({ cartItemCount = 0, onSearchChange }: HeaderProps) => {
               <Input
                 placeholder="Cari produk fixie..."
                 className="pl-10 bg-muted/50"
-                onChange={(e) => onSearchChange?.(e.target.value)}
               />
             </div>
           </div>
@@ -81,19 +78,23 @@ export const Header = ({ cartItemCount = 0, onSearchChange }: HeaderProps) => {
             <Link to="/cart">
               <Button variant="ghost" size="icon" className="relative">
                 <ShoppingCart className="w-5 h-5" />
-                {cartItemCount > 0 && (
+                {cartCount > 0 && (
                   <Badge
                     variant="destructive"
                     className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center text-xs p-0"
                   >
-                    {cartItemCount}
+                    {cartCount}
                   </Badge>
                 )}
               </Button>
             </Link>
 
+            
+
             {/* Auth buttons / User info */}
-            {!user && location.pathname !== "/login" && location.pathname !== "/register" ? (
+            {!user &&
+            location.pathname !== "/login" &&
+            location.pathname !== "/register" ? (
               <div className="flex items-center space-x-2">
                 <Link to="/login">
                   <Button variant="outline">Masuk</Button>
