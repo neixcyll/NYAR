@@ -1,101 +1,183 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Header } from "@/components/Header";
 import { HeroSection } from "@/components/HeroSection";
-import { CategoryNav } from "@/components/CategoryNav";
 import { ProductCard } from "@/components/ProductCard";
 import { Footer } from "@/components/Footer";
 import { useCart } from "@/hooks/useCart";
 import { supabase } from "@/lib/supabaseClient";
-import { Product } from "@/types/product";
+import { Button } from "@/components/ui/button";
 
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  brand?: string;
+  image_url?: string;
+  description?: string;
+  category_id?: string;
+  stock?: number;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  slug: string;
+}
 
 const Index = () => {
-  const [activeCategory, setActiveCategory] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
   const { cart } = useCart();
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [loadingCategories, setLoadingCategories] = useState(true);
 
-  // Fetch produk dari Supabase
+  // ==============================
+  // FETCH DATA (Kategori & Produk)
+  // ==============================
   useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching products:", error.message);
-        setProducts([]);
-      } else {
-        setProducts(data || []);
-      }
-      setLoading(false);
-    };
-
+    fetchCategories();
     fetchProducts();
   }, []);
 
-  // Filter produk berdasarkan kategori & pencarian
-  const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      const matchesCategory =
-        activeCategory === "all" || product.category === activeCategory;
-      const matchesSearch =
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (product.brand?.toLowerCase() || "").includes(
-          searchQuery.toLowerCase()
-        );
-      return matchesCategory && matchesSearch;
-    });
-  }, [products, activeCategory, searchQuery]);
+  // Ambil kategori dari tabel 'categories'
+  const fetchCategories = async () => {
+    setLoadingCategories(true);
+    const { data, error } = await supabase
+      .from("categories")
+      .select("id, name, slug")
+      .order("name", { ascending: true });
 
+    if (error) {
+      console.error("Error fetching categories:", error.message);
+      setCategories([]);
+    } else {
+      setCategories(data || []);
+    }
+    setLoadingCategories(false);
+  };
+
+  // Ambil produk dari tabel 'products'
+  const fetchProducts = async (categoryId?: string) => {
+    setLoadingProducts(true);
+    let query = supabase
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (categoryId) query = query.eq("category_id", categoryId);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error("Error fetching products:", error.message);
+      setProducts([]);
+    } else {
+      setProducts(data || []);
+    }
+    setLoadingProducts(false);
+  };
+
+  // ==============================
+  // HANDLE FILTER KATEGORI
+  // ==============================
+  const handleCategoryChange = (categoryId?: string) => {
+    if (categoryId === activeCategory) {
+      // klik ulang = reset ke "semua"
+      setActiveCategory(null);
+      fetchProducts();
+    } else {
+      setActiveCategory(categoryId || null);
+      fetchProducts(categoryId);
+    }
+  };
+
+  // ==============================
+  // FILTER PENCARIAN CLIENT-SIDE
+  // ==============================
+  const filteredProducts = useMemo(() => {
+    const search = searchQuery.toLowerCase();
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(search) ||
+        (p.brand?.toLowerCase() || "").includes(search)
+    );
+  }, [products, searchQuery]);
+
+  // ==============================
+  // RENDER
+  // ==============================
   return (
-    <div className="min-h-screen bg-background">
-      <Header cartItemCount={cart.itemCount} onSearchChange={setSearchQuery} />
+    <div className="min-h-screen bg-background text-foreground">
+      <Header
+        cartItemCount={cart.items?.length || 0}
+        onSearchChange={setSearchQuery}
+      />
 
       <HeroSection />
 
-      <CategoryNav
-        activeCategory={activeCategory}
-        onCategoryChange={setActiveCategory}
-      />
+      {/* NAVIGASI KATEGORI */}
+      <div className="border-t border-b bg-card/30">
+        <div className="container mx-auto px-4 py-3 flex flex-wrap justify-center gap-2">
+          <Button
+            variant={!activeCategory ? "default" : "outline"}
+            size="sm"
+            onClick={() => handleCategoryChange()}
+          >
+            Semua
+          </Button>
 
-      {/* Products Grid */}
+          {loadingCategories ? (
+            <p className="text-sm text-muted-foreground">
+              Memuat kategori...
+            </p>
+          ) : categories.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Belum ada kategori
+            </p>
+          ) : (
+            categories.map((cat) => (
+              <Button
+                key={cat.id}
+                variant={activeCategory === cat.id ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleCategoryChange(cat.id)}
+              >
+                {cat.name}
+              </Button>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* GRID PRODUK */}
       <section className="container mx-auto px-4 py-8">
         {searchQuery && (
-          <div className="mb-6">
-            <p className="text-muted-foreground">
-              Menampilkan {filteredProducts.length} hasil untuk "{searchQuery}"
-            </p>
-          </div>
+          <p className="mb-6 text-muted-foreground">
+            Menampilkan {filteredProducts.length} hasil untuk "{searchQuery}"
+          </p>
         )}
 
-        {loading ? (
+        {loadingProducts ? (
           <p className="text-center py-10 text-muted-foreground">
             Memuat produk...
           </p>
+        ) : filteredProducts.length === 0 ? (
+          <div className="text-center py-16">
+            <h3 className="text-lg font-semibold mb-2">
+              Tidak ada produk ditemukan
+            </h3>
+            <p className="text-muted-foreground">
+              Coba ubah kategori atau kata kunci pencarian
+            </p>
+          </div>
         ) : (
-          <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {filteredProducts.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
-
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-16">
-                <h3 className="text-lg font-semibold mb-2">
-                  Tidak ada produk ditemukan
-                </h3>
-                <p className="text-muted-foreground">
-                  Coba ubah kategori atau kata kunci pencarian
-                </p>
-              </div>
-            )}
-          </>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {filteredProducts.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
         )}
       </section>
 

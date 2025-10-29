@@ -63,15 +63,13 @@ const Cart = () => {
           id,
           quantity,
           products (
-            id,
-            name,
-            price,
-            image_url,
-            brand,
-            stock,
-            motif
-          )
-        `)
+          id,
+          name,
+          price,
+        image_url
+      )
+    `)
+
         .eq("user_id", userId);
 
       if (error) {
