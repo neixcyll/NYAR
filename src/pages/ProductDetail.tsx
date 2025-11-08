@@ -6,6 +6,7 @@ import { Footer } from "@/components/Footer";
 import { useCart } from "../context/cart-context"; // ✅ ganti jadi relatif juga
 import { Button } from "@/components/ui/button";
 import toast from "react-hot-toast"; // ✅ ditambahkan agar bisa pakai toast sukses
+import { ProductReviewSection } from "@/components/ProductReviewSection";
 
 
 interface Product {
@@ -26,7 +27,7 @@ const ProductDetail = () => {
   const [product, setProduct] = useState<Product | null>(null);
   const [activeImage, setActiveImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const { addToCart } = useCart(); // ✅ ambil fungsi dari context
+  const { addToCart, cartCount } = useCart();
 
   const [categoryName, setCategoryName] = useState<string>("");
 
@@ -70,9 +71,13 @@ const ProductDetail = () => {
   }, [id]);
 
   // ✅ Tambahkan fungsi handler supaya addToCart dan toast jalan bersamaan
-  const handleAddToCart = () => {
-    addToCart(); // update badge cart di header
-    toast.success(`${product?.name} berhasil ditambahkan ke keranjang`); // munculkan notif
+  const handleAddToCart = async (product: Product) => {
+    try {
+      await addToCart(product.id); // kirim ke context
+      toast.success(`${product.name} berhasil ditambahkan ke keranjang`);
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menambahkan ke keranjang");
+    }
   };
 
   if (loading) {
@@ -99,7 +104,7 @@ const ProductDetail = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <Header />
+      <Header cartItemCount={cartCount} />
 
       <main className="flex-1 container mx-auto px-4 py-8 max-w-6xl">
         {/* BREADCRUMB SEDERHANA */}
@@ -210,15 +215,14 @@ const ProductDetail = () => {
                 </div>
 
                 <div className="flex flex-col gap-2 min-w-[160px]">
-                  {/* ✅ ubah onClick agar panggil handleAddToCart */}
                   <Button
-                    size="lg"
-                    className="w-full bg-black text-white hover:bg-gray-800"
-                    disabled={product.stock <= 0}
-                    onClick={handleAddToCart} // ✅ ubah logic di sini
-                  >
-                    Tambah ke Keranjang
-                  </Button>
+  size="lg"
+  className="w-full bg-black text-white hover:bg-gray-800"
+  disabled={product.stock <= 0}
+  onClick={() => handleAddToCart(product)} // ✅ kirim product ke handler
+>
+  Tambah ke Keranjang
+</Button>
 
                   <Button
                     variant="outline"
@@ -301,6 +305,7 @@ const ProductDetail = () => {
             </div>
           </div>
         </section>
+        <ProductReviewSection productId={product.id} />
       </main>
 
       <Footer />

@@ -8,6 +8,8 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { supabase } from "@/lib/supabaseClient";
 import { useToast } from "@/hooks/use-toast";
+import { useCart } from "../context/cart-context";
+
 
 interface CartItem {
   id: string;
@@ -25,9 +27,16 @@ interface CartItem {
 
 const Cart = () => {
   const { toast } = useToast();
+  const { cartCount } = useCart(); // ✅ ini dia penyelamatmu
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const { fetchCart } = useCart();
+
+
+
+
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("id-ID", {
@@ -89,39 +98,41 @@ const Cart = () => {
   }, [userId]);
 
   const handleUpdateQuantity = async (itemId: string, newQty: number) => {
-    if (newQty < 1) return;
-    const { error } = await supabase
-      .from("cart_items")
-      .update({ quantity: newQty })
-      .eq("id", itemId);
+  if (newQty < 1) return;
+  const { error } = await supabase
+    .from("cart_items")
+    .update({ quantity: newQty })
+    .eq("id", itemId);
 
-    if (error) {
-      toast({
-        title: "Gagal memperbarui jumlah",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      setCartItems((prev) =>
-        prev.map((item) =>
-          item.id === itemId ? { ...item, quantity: newQty } : item
-        )
-      );
-    }
-  };
+  if (error) {
+    toast({
+      title: "Gagal memperbarui jumlah",
+      description: error.message,
+      variant: "destructive",
+    });
+  } else {
+    setCartItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId ? { ...item, quantity: newQty } : item
+      )
+    );
+    await fetchCart(); // ✅ update badge Header
+  }
+};
 
-  const handleRemoveItem = async (itemId: string) => {
-    const { error } = await supabase.from("cart_items").delete().eq("id", itemId);
-    if (error) {
-      toast({
-        title: "Gagal menghapus produk",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      setCartItems((prev) => prev.filter((item) => item.id !== itemId));
-    }
-  };
+const handleRemoveItem = async (itemId: string) => {
+  const { error } = await supabase.from("cart_items").delete().eq("id", itemId);
+  if (error) {
+    toast({
+      title: "Gagal menghapus produk",
+      description: error.message,
+      variant: "destructive",
+    });
+  } else {
+    setCartItems((prev) => prev.filter((item) => item.id !== itemId));
+    await fetchCart(); // ✅ update badge Header
+  }
+};
 
   const subtotal = cartItems.reduce(
     (total, item) => total + item.products.price * item.quantity,
@@ -152,7 +163,7 @@ const Cart = () => {
   if (cartItems.length === 0) {
     return (
       <div className="min-h-screen bg-background">
-        <Header />
+         <Header cartItemCount={cartCount} onSearchChange={setSearchQuery} />
         <div className="container mx-auto px-4 py-16 text-center">
           <ShoppingBag className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
           <h1 className="text-2xl font-bold mb-2">Keranjang Kosong</h1>
@@ -170,7 +181,7 @@ const Cart = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+       <Header cartItemCount={cartCount} onSearchChange={setSearchQuery} />
 
       <div className="container mx-auto px-4 py-8">
         <Link

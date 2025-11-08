@@ -343,15 +343,6 @@ const AdminPage = () => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label>Galeri Gambar (pisahkan koma)</Label>
-                <Input
-                  value={gallery}
-                  onChange={(e) => setGallery(e.target.value)}
-                  placeholder="https://img1.jpg, https://img2.jpg"
-                />
-              </div>
-
               {/* HARGA & STOK */}
               <div className="grid grid-cols-2 gap-4">
                 <div>

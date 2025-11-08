@@ -3,20 +3,12 @@ import { Header } from "@/components/Header";
 import { HeroSection } from "@/components/HeroSection";
 import { ProductCard } from "@/components/ProductCard";
 import { Footer } from "@/components/Footer";
-import { useCart } from "@/hooks/useCart";
+import { useCart } from "../context/cart-context"; // pastikan path benar
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/sonner";
+import { Product } from "@/types/product"; // ✅ pakai definisi global
 
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  brand?: string;
-  image_url?: string;
-  description?: string;
-  category_id?: string;
-  stock?: number;
-}
 
 interface Category {
   id: string;
@@ -25,7 +17,7 @@ interface Category {
 }
 
 const Index = () => {
-  const { cart } = useCart();
+  const { addToCart, cartCount } = useCart(); // ✅ ambil fungsi & jumlah cart dari context
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -106,14 +98,24 @@ const Index = () => {
   }, [products, searchQuery]);
 
   // ==============================
+  // TAMBAH KE KERANJANG + NOTIF
+  // ==============================
+  const handleAddToCart = async (product: Product) => {
+    try {
+      await addToCart(product.id); // kirim ke context
+      toast.success(`${product.name} berhasil ditambahkan ke keranjang`);
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menambahkan ke keranjang");
+    }
+  };
+
+  // ==============================
   // RENDER
   // ==============================
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Header
-        cartItemCount={cart.items?.length || 0}
-        onSearchChange={setSearchQuery}
-      />
+      {/* ✅ badge di Header akan mengikuti cartCount */}
+      <Header cartItemCount={cartCount} onSearchChange={setSearchQuery} />
 
       <HeroSection />
 
@@ -129,13 +131,9 @@ const Index = () => {
           </Button>
 
           {loadingCategories ? (
-            <p className="text-sm text-muted-foreground">
-              Memuat kategori...
-            </p>
+            <p className="text-sm text-muted-foreground">Memuat kategori...</p>
           ) : categories.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Belum ada kategori
-            </p>
+            <p className="text-sm text-muted-foreground">Belum ada kategori</p>
           ) : (
             categories.map((cat) => (
               <Button
@@ -175,7 +173,11 @@ const Index = () => {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {filteredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
+              <ProductCard
+                key={product.id}
+                product={product}
+                onAddToCart={handleAddToCart} // ✅ kirim handler
+              />
             ))}
           </div>
         )}

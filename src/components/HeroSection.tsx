@@ -26,15 +26,6 @@ export const HeroSection = () => {
             <p className="text-lg text-muted-foreground mb-8 max-w-md mx-auto lg:mx-0">
               Temukan sepeda fixie premium dan aksesoris berkualitas tinggi untuk urban cycling experience terbaik.
             </p>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-              <Button size="lg" className="px-8">
-                Jelajahi Koleksi
-              </Button>
-              <Button variant="outline" size="lg" className="px-8">
-                Pelajari Lebih Lanjut
-              </Button>
-            </div>
           </div>
 
           {/* Bike Illustration Area */}

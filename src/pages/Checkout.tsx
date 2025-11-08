@@ -12,6 +12,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { useCart } from "../context/cart-context";
 
 interface CartItem {
   id: string;
@@ -31,6 +32,7 @@ const Checkout = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState("transfer");
   const [shippingMethod, setShippingMethod] = useState("regular");
+  const { cartCount, fetchCart } = useCart();
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat("id-ID", {
@@ -57,9 +59,9 @@ const Checkout = () => {
     fetchUser();
   }, []);
 
-  // Ambil data keranjang dari Supabase
+  // Ambil data keranjang
   useEffect(() => {
-    const fetchCart = async () => {
+    const getCart = async () => {
       if (!userId) return;
       setLoading(true);
 
@@ -80,8 +82,7 @@ const Checkout = () => {
       }
       setLoading(false);
     };
-
-    fetchCart();
+    getCart();
   }, [userId]);
 
   const shippingCost = shippingMethod === "express" ? 25000 : 0;
@@ -91,7 +92,8 @@ const Checkout = () => {
   );
   const totalWithShipping = subtotal + shippingCost;
 
-  const handleSubmitOrder = async () => {
+  // === Fungsi utama gabungan: buat order + popup Midtrans ===
+  const handleOrderAndPay = async () => {
     if (!userId || cartItems.length === 0) {
       toast({
         title: "Tidak bisa membuat pesanan",
@@ -101,33 +103,89 @@ const Checkout = () => {
       return;
     }
 
-    // Simpan data pesanan ke tabel orders (opsional)
-    const { error } = await supabase.from("orders").insert([
-      {
-        user_id: userId,
-        total_price: totalWithShipping,
-        status: "pending",
-        payment_method: paymentMethod,
-        shipping_method: shippingMethod,
-        created_at: new Date(),
-      },
-    ]);
+    try {
+      // 1️⃣ Simpan pesanan ke Supabase
+      const { data: orderData, error } = await supabase
+        .from("orders")
+        .insert([
+          {
+            user_id: userId,
+            total_price: totalWithShipping,
+            status: "pending",
+            payment_method: paymentMethod,
+            shipping_method: shippingMethod,
+            created_at: new Date(),
+          },
+        ])
+        .select()
+        .single();
 
-    if (error) {
+      if (error) throw error;
+
+      // 2️⃣ Panggil server proxy untuk minta token Midtrans
+      const res = await fetch("http://localhost:3001/api/create-transaction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Neil SJ",
+          email: "neil@example.com",
+          amount: totalWithShipping,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Gagal meminta token ke server backend");
+
+      const tokenData = await res.json();
+      const snapToken = tokenData.token || tokenData.snap_token;
+      if (!snapToken) throw new Error("Gagal membuat Snap Token");
+
+      console.log("Token data:", tokenData);
+      console.log("Snap token:", snapToken);
+
+      // 3️⃣ Jalankan popup Snap Midtrans
+      if (!window.snap) {
+        toast({
+          title: "Midtrans belum siap",
+          description: "Silakan refresh halaman dan coba lagi.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      window.snap.pay(snapToken, {
+        onSuccess: async (result: any) => {
+          console.log("Pembayaran sukses:", result);
+          await supabase.from("orders").update({ status: "paid" }).eq("id", orderData.id);
+          await supabase.from("cart_items").delete().eq("user_id", userId);
+          await fetchCart();
+          setCartItems([]);
+          toast({
+            title: "Pembayaran berhasil!",
+            description: "Terima kasih telah berbelanja di FixieStore.",
+          });
+        },
+        onPending: (result: any) => {
+          console.log("Menunggu pembayaran:", result);
+        },
+        onError: (result: any) => {
+          console.error("Error pembayaran:", result);
+          toast({
+            title: "Gagal memproses pembayaran",
+            description: "Terjadi kesalahan pada Midtrans.",
+            variant: "destructive",
+          });
+        },
+        onClose: () => {
+          console.log("Popup ditutup tanpa pembayaran.");
+        },
+      });
+    } catch (err: any) {
+      console.error("Error checkout:", err.message);
       toast({
-        title: "Gagal membuat pesanan",
-        description: error.message,
+        title: "Terjadi kesalahan",
+        description: err.message,
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Pesanan berhasil dibuat!",
-        description: "Terima kasih telah berbelanja di FixieStore.",
-      });
-
-      // Opsional: hapus isi keranjang setelah checkout
-      await supabase.from("cart_items").delete().eq("user_id", userId);
-      setCartItems([]);
     }
   };
 
@@ -141,7 +199,7 @@ const Checkout = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
+      <Header cartItemCount={cartCount} />
 
       <div className="container mx-auto px-4 py-8">
         <Link
@@ -165,37 +223,10 @@ const Checkout = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="firstName">Nama Depan</Label>
-                    <Input id="firstName" placeholder="John" />
-                  </div>
-                  <div>
-                    <Label htmlFor="lastName">Nama Belakang</Label>
-                    <Input id="lastName" placeholder="Doe" />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="phone">Nomor Telepon</Label>
-                  <Input id="phone" placeholder="08123456789" />
-                </div>
-                <div>
-                  <Label htmlFor="address">Alamat Lengkap</Label>
-                  <Textarea
-                    id="address"
-                    placeholder="Jalan, Nomor Rumah, RT/RW"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="city">Kota</Label>
-                    <Input id="city" placeholder="Jakarta" />
-                  </div>
-                  <div>
-                    <Label htmlFor="postalCode">Kode Pos</Label>
-                    <Input id="postalCode" placeholder="12345" />
-                  </div>
-                </div>
+                <Input placeholder="Nama Depan" />
+                <Input placeholder="Nama Belakang" />
+                <Input placeholder="Nomor Telepon" />
+                <Textarea placeholder="Alamat Lengkap" />
               </CardContent>
             </Card>
 
@@ -208,20 +239,12 @@ const Checkout = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <RadioGroup
-                  value={shippingMethod}
-                  onValueChange={setShippingMethod}
-                >
+                <RadioGroup value={shippingMethod} onValueChange={setShippingMethod}>
                   <div className="flex items-center space-x-2 p-3 border rounded-lg">
                     <RadioGroupItem value="regular" id="regular" />
                     <Label htmlFor="regular" className="flex-1 cursor-pointer">
                       <div className="flex justify-between">
-                        <div>
-                          <p className="font-medium">Pengiriman Reguler</p>
-                          <p className="text-sm text-muted-foreground">
-                            5-7 hari kerja
-                          </p>
-                        </div>
+                        <p className="font-medium">Reguler</p>
                         <span className="font-medium text-green-600">GRATIS</span>
                       </div>
                     </Label>
@@ -230,15 +253,8 @@ const Checkout = () => {
                     <RadioGroupItem value="express" id="express" />
                     <Label htmlFor="express" className="flex-1 cursor-pointer">
                       <div className="flex justify-between">
-                        <div>
-                          <p className="font-medium">Pengiriman Express</p>
-                          <p className="text-sm text-muted-foreground">
-                            1-2 hari kerja
-                          </p>
-                        </div>
-                        <span className="font-medium">
-                          {formatPrice(25000)}
-                        </span>
+                        <p className="font-medium">Express</p>
+                        <span className="font-medium">{formatPrice(25000)}</span>
                       </div>
                     </Label>
                   </div>
@@ -255,35 +271,18 @@ const Checkout = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <RadioGroup
-                  value={paymentMethod}
-                  onValueChange={setPaymentMethod}
-                >
+                <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}>
                   <div className="flex items-center space-x-2 p-3 border rounded-lg">
                     <RadioGroupItem value="transfer" id="transfer" />
                     <Label htmlFor="transfer" className="flex-1 cursor-pointer">
                       <p className="font-medium">Transfer Bank</p>
-                      <p className="text-sm text-muted-foreground">
-                        BCA, Mandiri, BNI, BRI
-                      </p>
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2 p-3 border rounded-lg">
                     <RadioGroupItem value="ewallet" id="ewallet" />
                     <Label htmlFor="ewallet" className="flex-1 cursor-pointer">
                       <p className="font-medium">E-Wallet</p>
-                      <p className="text-sm text-muted-foreground">
-                        GoPay, OVO, DANA, ShopeePay
-                      </p>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2 p-3 border rounded-lg">
-                    <RadioGroupItem value="cod" id="cod" />
-                    <Label htmlFor="cod" className="flex-1 cursor-pointer">
-                      <p className="font-medium">Bayar di Tempat (COD)</p>
-                      <p className="text-sm text-muted-foreground">
-                        Bayar saat barang diterima
-                      </p>
+                      <p className="text-sm text-muted-foreground">GoPay, OVO, DANA, ShopeePay</p>
                     </Label>
                   </div>
                 </RadioGroup>
@@ -305,26 +304,9 @@ const Checkout = () => {
                     </p>
                   ) : (
                     cartItems.map((item) => (
-                      <div key={item.id} className="flex gap-3">
-                        <img
-                          src={item.products.image_url || "/placeholder.png"}
-                          alt={item.products.name}
-                          className="w-12 h-12 object-cover rounded"
-                        />
-                        <div className="flex-1">
-                          <p className="font-medium text-sm">
-                            {item.products.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {item.quantity} ×{" "}
-                            {formatPrice(item.products.price)}
-                          </p>
-                        </div>
-                        <span className="text-sm font-medium">
-                          {formatPrice(
-                            item.products.price * item.quantity
-                          )}
-                        </span>
+                      <div key={item.id} className="flex justify-between text-sm">
+                        <span>{item.products.name}</span>
+                        <span>{formatPrice(item.products.price * item.quantity)}</span>
                       </div>
                     ))
                   )}
@@ -332,42 +314,14 @@ const Checkout = () => {
 
                 <Separator />
 
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>Subtotal</span>
-                    <span>{formatPrice(subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Ongkos Kirim</span>
-                    <span>
-                      {shippingCost === 0
-                        ? "GRATIS"
-                        : formatPrice(shippingCost)}
-                    </span>
-                  </div>
-                </div>
-
-                <Separator />
-
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total</span>
-                  <span className="text-primary">
-                    {formatPrice(totalWithShipping)}
-                  </span>
+                  <span className="text-primary">{formatPrice(totalWithShipping)}</span>
                 </div>
 
-                <Button
-                  onClick={handleSubmitOrder}
-                  className="w-full"
-                  size="lg"
-                >
+                <Button onClick={handleOrderAndPay} className="w-full" size="lg">
                   Buat Pesanan
                 </Button>
-
-                <p className="text-xs text-muted-foreground text-center">
-                  Dengan membuat pesanan, Anda menyetujui syarat dan ketentuan
-                  kami
-                </p>
               </CardContent>
             </Card>
           </div>
