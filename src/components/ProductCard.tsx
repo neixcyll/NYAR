@@ -30,7 +30,7 @@ export const ProductCard = ({ product, onAddToCart }: ProductCardProps) => {
         variant: "destructive",
       });
       return;
-    }
+    }   
     onAddToCart(product);
   };
 
